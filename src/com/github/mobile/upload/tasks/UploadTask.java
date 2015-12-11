@@ -13,7 +13,9 @@ import com.github.mobile.upload.model.UploadRequest;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.EOFException;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -35,8 +37,6 @@ public class UploadTask extends AsyncTask<Void, Void, Void> {
     private String uploadId;
 	private UploadListener uploadLstener;
 	private UploadRequest request;
-	
-    private static boolean FLAG = true;
     
     public static String getActionBroadcast() {
         return NAMESPACE + ACTION_BROADCAST_SUFFIX;
@@ -87,8 +87,6 @@ public class UploadTask extends AsyncTask<Void, Void, Void> {
 	 */
 	public String sendFileUpload() throws IOException {
 		
-		FLAG = true;
-		
 		final String boundary = getBoundary();
 		final byte[] boundaryBytes = getBoundaryBytes(boundary);
         
@@ -110,21 +108,27 @@ public class UploadTask extends AsyncTask<Void, Void, Void> {
 				}
 			}
             
-            if( FLAG ) {
-            	final byte[] trailer = getTrailerBytes(boundary);
-                requestStream.write(trailer, 0, trailer.length);
-                
-                final int serverResponseCode = urlConnection.getResponseCode();
-                if (serverResponseCode / 100 == 2) {
-                    responseStream = urlConnection.getInputStream();
-                } else { // getErrorStream if the response code is not 2xx
-                    responseStream = urlConnection.getErrorStream();
-                }
-                result = getResponseBodyAsString(responseStream);
-                uploadLstener.onCompleted(uploadId, serverResponseCode, result);
-            } else {
-            	throw new Exception("user cancel");
+			final byte[] trailer = getTrailerBytes(boundary);
+            requestStream.write(trailer, 0, trailer.length);
+            
+            final int serverResponseCode = urlConnection.getResponseCode();
+            if (serverResponseCode / 100 == 2) {
+                responseStream = urlConnection.getInputStream();
+            } else { // getErrorStream if the response code is not 2xx
+                responseStream = urlConnection.getErrorStream();
             }
+            
+            if( request.isDownloadFile() ) {
+				urlConnection.connect();
+				String filePath = downloadFile(responseStream, request.getDownloadFilePath(),
+						request.getDownloadFileName(), urlConnection.getContentLength());
+				uploadLstener.onCompleted(uploadId, serverResponseCode, filePath);
+			} else {
+				result = getResponseBodyAsString(responseStream);
+				uploadLstener.onCompleted(uploadId, serverResponseCode, result);
+			}
+            result = getResponseBodyAsString(responseStream);
+            uploadLstener.onCompleted(uploadId, serverResponseCode, result);
 		} catch(Exception e) {
 			if( e instanceof EOFException ) {
 //				uploadLstener.onCompleted(uploadId, -1, "EOFException\n");
@@ -419,18 +423,12 @@ public class UploadTask extends AsyncTask<Void, Void, Void> {
 	    long fileSize = filesToUpload.length();
 	    try {
 	        while ((bytesRead = stream.read(buffer, 0, buffer.length)) > 0) {
-	        	
-	        	if( FLAG ) {
-	        		requestStream.write(buffer, 0, bytesRead);
-	 	            
-	 	            total = total + bytesRead;
-	 	        	if( fileSize > 0 ) {
-	 	        		sendBroadcast( ((int) (total * 100 / fileSize)) );
-	 				}
-	        	} else {
-	        		break;
-	        	}
-	           
+	        	requestStream.write(buffer, 0, bytesRead);
+ 	            
+ 	            total = total + bytesRead;
+ 	        	if( fileSize > 0 ) {
+ 	        		sendBroadcast( ((int) (total * 100 / fileSize)) );
+ 				}
 	        }
 	    } finally {
 	        closeInputStream(stream);
@@ -480,12 +478,32 @@ public class UploadTask extends AsyncTask<Void, Void, Void> {
     	intent.putExtra(BROADCAST_PROCESS, process);
     	request.getContext().sendBroadcast(intent);
     }
-
-	public boolean isFLAG() {
-		return FLAG;
-	}
-
-	public void setFLAG(boolean fLAG) {
-		FLAG = fLAG;
+    
+    /**
+	 * 下載檔案
+	 * @param inStream
+	 * @param fileName
+	 * @throws IOException
+	 * @Return 檔案路徑
+	 */
+	private String downloadFile(InputStream inStream, String downloadFilePath, String downloadFileName, int fileSize) throws IOException {
+    	
+    	File attach = new File(downloadFilePath, downloadFileName);
+		
+		FileOutputStream output = new FileOutputStream(attach.getAbsolutePath());
+		byte[] buffer = new byte[BUFFER_SIZE];
+		int bytesRead;
+		int total = 0;
+		int value = 0;
+		while ((bytesRead = inStream.read(buffer, 0, buffer.length)) > 0) {
+			output.write(buffer, 0, bytesRead);
+			total = total + bytesRead;
+			value = ((int) (total * 100 / fileSize));
+			uploadLstener.onProgress(downloadFileName, value);
+		}
+		
+		output.close();
+		inStream.close();
+		return attach.getAbsolutePath();
 	}
 }

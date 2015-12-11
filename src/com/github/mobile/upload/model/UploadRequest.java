@@ -6,9 +6,12 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import android.content.Context;
+import android.os.Environment;
 
 public class UploadRequest {
 	
@@ -21,6 +24,7 @@ public class UploadRequest {
     private final ArrayList<FileToUpload> filesToUpload;
     private final ArrayList<NameValue> headers;
     private final ArrayList<NameValue> parameters;
+    private String downloadFileName, downloadFilePath;
 
     /**
      * Creates a new upload request.
@@ -217,4 +221,24 @@ public class UploadRequest {
 		
 		return stringBuffer.toString();
     }
+    
+    public boolean isDownloadFile() {
+		return (downloadFileName != null && !"".equals(downloadFileName.trim()))? true:false;
+	}
+
+	public void downloadFile(String filePath, String fileName) {
+		downloadFileName = fileName;
+		downloadFilePath = filePath;
+	}
+	
+	public String getDownloadFileName() {
+		return downloadFileName;
+	}
+	
+	public String getDownloadFilePath() {
+		if( downloadFilePath == null || "".equals(downloadFilePath.trim()) ) {
+			downloadFilePath = Environment.getExternalStorageDirectory().getAbsolutePath();
+		}
+		return downloadFilePath;
+	}
 }
