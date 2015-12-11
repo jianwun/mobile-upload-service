@@ -30,3 +30,12 @@ request.addParameter("parameterName2", "234");
 request.addParameter("content", <your fileName>);
 request.addFileToUpload(<your file path>, <your file parameter name>, <your fileName>, "application/x-www-form-urlencoded");
 ```
+* Download File
+```cmd
+UploadRequest request = new UploadRequest(this, "request002", <your server url>);
+request.setMethod("GET");
+request.addParameter("parameterName1", "123");
+request.addParameter("parameterName2", "234");
+request.addParameter("content", <your fileName>);
+request.downloadFile(<your file path>, <your file name>);
+```
